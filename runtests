@@ -1,6 +1,6 @@
 #!/bin/sh
 
-: ${CCQBE:=./cproc-qbe}
+: ${CCQBE:=./bin/cproc-qbe}
 
 if [ $# = 0 ] ; then
 	set -- test/*.c*
