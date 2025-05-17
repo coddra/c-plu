@@ -3,7 +3,7 @@
 : ${CCQBE:=./cproc-qbe}
 
 if [ $# = 0 ] ; then
-	set -- test/*.c
+	set -- test/*.c*
 fi
 
 numtest=0
@@ -14,7 +14,7 @@ got=$(mktemp)
 trap 'rm "$got"' EXIT
 
 for test ; do
-	name=${test%.c}
+	name=${test%.c*}
 	case $name in
 	*+*) arch=${name##*+} ;;
 	*) arch=x86_64-sysv ;;

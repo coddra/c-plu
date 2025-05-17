@@ -20,7 +20,7 @@ enum filetype {
 	NONE,   /* detect based on file extension */
 	ASM,    /* assembly source */
 	ASMPP,  /* assembly source requiring preprocessing */
-	C,      /* C source */
+	C,      /* C or C-PLU source */
 	CHDR,   /* C header */
 	CPPOUT, /* preprocessed C source */
 	OBJ,    /* object file */
@@ -87,7 +87,7 @@ detectfiletype(const char *name)
 	dot = strrchr(name, '.');
 	if (dot) {
 		++dot;
-		if (strcmp(dot, "c") == 0)
+		if (strcmp(dot, "c") == 0 || strcmp(dot, "cp") == 0)
 			return C;
 		if (strcmp(dot, "h") == 0)
 			return CHDR;
