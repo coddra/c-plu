@@ -920,23 +920,42 @@ postfixexpr(struct scope *s, struct expr *r)
 		r = primaryexpr(s);
 	for (;;) {
 		switch (tok.kind) {
-		case TLBRACK:  /* subscript */
-			next();
-			arr = r;
-			idx = expr(s);
-			if (arr->type->kind != TYPEPOINTER) {
-				if (idx->type->kind != TYPEPOINTER)
-					error(&tok.loc, "either array or index must be pointer type");
-				tmp = arr;
-				arr = idx;
-				idx = tmp;
+		case TPERIOD:
+			if (r->type->kind == TYPEPOINTER)
+				lvalue = true;
+			else {
+				lvalue = false;
+				r = mkunaryexpr(TBAND, r);
 			}
-			if (arr->type->base->incomplete)
-				error(&tok.loc, "array is pointer to incomplete type");
-			if (!(idx->type->prop & PROPINT))
-				error(&tok.loc, "index is not an integer type");
-			e = mkunaryexpr(TMUL, mkbinaryexpr(&tok.loc, TADD, arr, idx));
-			expect(TRBRACK, "after array index");
+			/* fallthrough */
+		case TARROW:
+			op = tok.kind;
+			if (r->type->kind != TYPEPOINTER)
+				error(&tok.loc, "'%s' operator must be applied to pointer to struct/union", tokstr[op]);
+			t = r->type->base;
+			tq = r->type->qual;
+			if (t->kind != TYPESTRUCT && t->kind != TYPEUNION)
+				error(&tok.loc, "'%s' operator must be applied to pointer to struct/union", tokstr[op]);
+			next();
+			if (tok.kind != TIDENT)
+				error(&tok.loc, "expected identifier after '%s' operator", tokstr[op]);
+			lvalue = lvalue || op == TARROW || r->base->lvalue;
+			offset = 0;
+			m = typemember(t, tok.lit, &offset);
+			if (!m)
+				error(&tok.loc, "struct/union has no member named '%s'", tok.lit);
+			r = mkbinaryexpr(&tok.loc, TADD, exprconvert(r, &typeulong), mkconstexpr(&typeulong, offset));
+			r->type = mkpointertype(m->type, tq | m->qual);
+			r = mkunaryexpr(TMUL, r);
+			r->lvalue = lvalue;
+			if (m->bits.before || m->bits.after) {
+				e = mkexpr(EXPRBITFIELD, r->type, r);
+				e->lvalue = lvalue;
+				e->u.bitfield.bits = m->bits;
+			} else {
+				e = r;
+			}
+			next();
 			break;
 		case TLPAREN:  /* function call */
 			next();
@@ -973,37 +992,23 @@ postfixexpr(struct scope *s, struct expr *r)
 			e = decay(e);
 			next();
 			break;
-		case TPERIOD:
-			r = mkunaryexpr(TBAND, r);
-			/* fallthrough */
-		case TARROW:
-			op = tok.kind;
-			if (r->type->kind != TYPEPOINTER)
-				error(&tok.loc, "'%s' operator must be applied to pointer to struct/union", tokstr[op]);
-			t = r->type->base;
-			tq = r->type->qual;
-			if (t->kind != TYPESTRUCT && t->kind != TYPEUNION)
-				error(&tok.loc, "'%s' operator must be applied to pointer to struct/union", tokstr[op]);
+		case TLBRACK:  /* subscript */
 			next();
-			if (tok.kind != TIDENT)
-				error(&tok.loc, "expected identifier after '%s' operator", tokstr[op]);
-			lvalue = op == TARROW || r->base->lvalue;
-			offset = 0;
-			m = typemember(t, tok.lit, &offset);
-			if (!m)
-				error(&tok.loc, "struct/union has no member named '%s'", tok.lit);
-			r = mkbinaryexpr(&tok.loc, TADD, exprconvert(r, &typeulong), mkconstexpr(&typeulong, offset));
-			r->type = mkpointertype(m->type, tq | m->qual);
-			r = mkunaryexpr(TMUL, r);
-			r->lvalue = lvalue;
-			if (m->bits.before || m->bits.after) {
-				e = mkexpr(EXPRBITFIELD, r->type, r);
-				e->lvalue = lvalue;
-				e->u.bitfield.bits = m->bits;
-			} else {
-				e = r;
+			arr = r;
+			idx = expr(s);
+			if (arr->type->kind != TYPEPOINTER) {
+				if (idx->type->kind != TYPEPOINTER)
+					error(&tok.loc, "either array or index must be pointer type");
+				tmp = arr;
+				arr = idx;
+				idx = tmp;
 			}
-			next();
+			if (arr->type->base->incomplete)
+				error(&tok.loc, "array is pointer to incomplete type");
+			if (!(idx->type->prop & PROPINT))
+				error(&tok.loc, "index is not an integer type");
+			e = mkunaryexpr(TMUL, mkbinaryexpr(&tok.loc, TADD, arr, idx));
+			expect(TRBRACK, "after array index");
 			break;
 		case TINC:
 		case TDEC:
