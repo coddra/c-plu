@@ -1,4 +1,5 @@
 *.o
+/bin
 /cproc
 /cproc-qbe
 /config.h
