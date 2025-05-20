@@ -1,0 +1,29 @@
+type :i.1 = { w, }
+export
+function w $main() {
+@start.1
+	%.1 =l alloc4 4
+	%.3 =l alloc8 8
+	%.7 =l alloc4 4
+	%.15 =l alloc4 4
+@body.2
+	%.2 =w call $add(w 0, w 1)
+	storew %.2, %.1
+	%.4 =w loadw %.1
+	%.5 =w call $add(w %.4, w 2)
+	%.6 =l loadl %.3
+	storew %.5, %.6
+	%.8 =l loadl %.3
+	%.9 =w loadw %.8
+	%.10 =w call $add(w %.9, w 3)
+	%.11 =w call $add(w %.10, w 4)
+	storew %.11, %.7
+	%.12 =l call $inc(l %.1)
+	%.13 =w loadw %.12
+	%.14 =w call $add(w %.13, w 5)
+	storew %.14, %.1
+	storew 1, %.15
+	call $decx(l %.15)
+	%.16 =w call $getx(:i.1 %.15)
+	ret %.16
+}

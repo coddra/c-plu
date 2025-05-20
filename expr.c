@@ -907,7 +907,7 @@ mkincdecexpr(enum tokenkind op, struct expr *base, bool post)
 static struct expr *
 postfixexpr(struct scope *s, struct expr *r)
 {
-	struct expr *e, *arr, *idx, *tmp, **end;
+	struct expr *e, *arr, *idx, *obj, *tmp, **end;
 	struct type *t;
 	struct decl *p;
 	struct member *m;
@@ -919,31 +919,36 @@ postfixexpr(struct scope *s, struct expr *r)
 	if (!r)
 		r = primaryexpr(s);
 	for (;;) {
+		obj = NULL;
+		op = tok.kind;
 		switch (tok.kind) {
 		case TPERIOD:
-			if (r->type->kind == TYPEPOINTER)
-				lvalue = true;
-			else {
-				lvalue = false;
+			obj = r;
+			lvalue = r->type->kind == TYPEPOINTER || r->lvalue;
+			// autoderef works by *not* making a pointer if r is already a pointer
+			if (r->type->kind != TYPEPOINTER) {
+				if (!r->lvalue && r->type->kind != TYPEFUNC && r->type->kind != TYPESTRUCT && r->type->kind != TYPEUNION) {
+					next();
+					goto dotcall_l;
+				}
 				r = mkunaryexpr(TBAND, r);
 			}
 			/* fallthrough */
 		case TARROW:
-			op = tok.kind;
 			if (r->type->kind != TYPEPOINTER)
 				error(&tok.loc, "'%s' operator must be applied to pointer to struct/union", tokstr[op]);
 			t = r->type->base;
 			tq = r->type->qual;
-			if (t->kind != TYPESTRUCT && t->kind != TYPEUNION)
-				error(&tok.loc, "'%s' operator must be applied to pointer to struct/union", tokstr[op]);
 			next();
+			if (t->kind != TYPESTRUCT && t->kind != TYPEUNION)
+				goto dotcall_l;
 			if (tok.kind != TIDENT)
 				error(&tok.loc, "expected identifier after '%s' operator", tokstr[op]);
-			lvalue = lvalue || op == TARROW || r->base->lvalue;
+			lvalue = lvalue || op == TARROW;
 			offset = 0;
 			m = typemember(t, tok.lit, &offset);
 			if (!m)
-				error(&tok.loc, "struct/union has no member named '%s'", tok.lit);
+				goto dotcall_l;
 			r = mkbinaryexpr(&tok.loc, TADD, exprconvert(r, &typeulong), mkconstexpr(&typeulong, offset));
 			r->type = mkpointertype(m->type, tq | m->qual);
 			r = mkunaryexpr(TMUL, r);
@@ -957,8 +962,16 @@ postfixexpr(struct scope *s, struct expr *r)
 			}
 			next();
 			break;
+		dotcall_l: /* dot syntax function call */
+			// force dereference to give '->' a meaning on dotcall
+			if (op == TARROW)
+				obj = mkunaryexpr(TMUL, r);
+			r = primaryexpr(s);
+			expect(TLPAREN, "on dot syntax function call as expression is not a member name");
+			/* fallthrough */
 		case TLPAREN:  /* function call */
-			next();
+			if (op == TLPAREN)
+				next();
 			if (r->kind == EXPRIDENT && r->u.ident.decl->kind == DECLBUILTIN) {
 				e = builtinfunc(s, r->u.ident.decl->u.builtin);
 				expect(TRPAREN, "after builtin parameters");
@@ -968,12 +981,23 @@ postfixexpr(struct scope *s, struct expr *r)
 				error(&tok.loc, "called object is not a function");
 			t = r->type->base;
 			e = mkexpr(EXPRCALL, t->base, r);
-			e->u.call.args = NULL;
-			e->u.call.nargs = 0;
 			p = t->u.func.params;
-			end = &e->u.call.args;
+			if (obj && p) {
+				if (!typecompatible(p->type, obj->type)) {
+					/* auto lifting */
+					if (p->type->kind == TYPEPOINTER && obj->lvalue && typecompatible(p->type->base, obj->type))
+						obj = mkunaryexpr(TBAND, obj);
+					/* auto dereference */
+					else if (obj->type->kind == TYPEPOINTER && typecompatible(p->type, obj->type->base))
+						obj = mkunaryexpr(TMUL, obj);
+				}
+				p = p->next;
+			}
+			e->u.call.args = obj;
+			e->u.call.nargs = obj ? 1 : 0;
+			end = obj ? &obj->next : &e->u.call.args;
 			while (tok.kind != TRPAREN) {
-				if (e->u.call.args)
+				if (e->u.call.nargs > (obj ? 1 : 0))
 					expect(TCOMMA, "or ')' after function call argument");
 				if (!p && !t->u.func.isvararg)
 					error(&tok.loc, "too many arguments for function call");
