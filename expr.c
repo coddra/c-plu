@@ -194,6 +194,8 @@ struct expr *
 exprassign(struct expr *e, struct type *t)
 {
 	struct type *et;
+	struct expr *wrap = NULL;
+	struct decl *d;
 
 	et = e->type;
 	switch (t->kind) {
@@ -217,8 +219,23 @@ exprassign(struct expr *e, struct type *t)
 		break;
 	case TYPESTRUCT:
 	case TYPEUNION:
-		if (!typecompatible(t, et))
-			error(&tok.loc, "assignment to %s type must be from compatible type", tokstr[t->kind]);
+		if (typecompatible(t, et))
+			break;
+		if (t->kind == TYPESTRUCT)
+			error(&tok.loc, "assignment to struct type must be from compatible type");
+		for (struct member *m = t->u.structunion.members; m; m = m->next)
+			if (typecompatible(m->type, et)) {
+				wrap = mkexpr(EXPRCOMPOUND, t, NULL);
+				wrap->lvalue = true;
+				d = mkdecl(NULL, DECLOBJECT, t, QUALNONE, LINKNONE);
+				d->u.obj.storage = SDAUTO; // test for filescope
+				wrap->u.compound.decl = d;
+				wrap->u.compound.init = mkinit(m->offset, m->offset + m->type->size, m->bits, e);
+				e = wrap;
+				break;
+			}
+		if (!wrap)
+			error(&tok.loc, "assignment to union type must be from compatible type");
 		break;
 	default:
 		assert(t->prop & PROPARITH);
@@ -1322,7 +1339,7 @@ mkassignexpr(struct expr *l, struct expr *r)
 
 	e = mkexpr(EXPRASSIGN, l->type, NULL);
 	e->u.assign.l = l;
-	e->u.assign.r = exprconvert(r, l->type);
+	e->u.assign.r = exprassign(r, l->type);
 	return e;
 }
 

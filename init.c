@@ -198,6 +198,7 @@ parseinit(struct scope *s, struct type *t)
 	struct expr *expr;
 	struct type *base;
 	struct bitfield bits;
+	struct member *m;
 
 	p.cur = NULL;
 	p.sub = p.obj;
@@ -253,6 +254,11 @@ parseinit(struct scope *s, struct type *t)
 			case TYPEUNION:
 				if (typecompatible(expr->type, t))
 					goto add;
+				if (t->kind == TYPESTRUCT)
+					break;
+				for (m = t->u.structunion.members; m; m = m->next)
+					if (typecompatible(expr->type, m->type))
+						goto add;
 				break;
 			default:  /* scalar type */
 				assert(t->prop & PROPSCALAR);

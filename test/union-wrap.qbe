@@ -1,0 +1,19 @@
+export data $a = align 8 { d d_2.5, }
+type :u.1 = { { w } { d } }
+export
+function $g(:u.1 %.1) {
+@start.1
+@body.2
+	ret
+}
+export
+function $f() {
+@start.3
+	%.1 =l alloc8 8
+@body.4
+	storew 2, %.1
+	%.2 =l add %.1, 4
+	storew 0, %.2
+	call $g(:u.1 %.1)
+	ret
+}

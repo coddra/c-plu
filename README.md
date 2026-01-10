@@ -7,6 +7,7 @@ Funky little extra features to C to make it even more fun.
 Currently added features:
  - [auto dereferencing](#auto-dereferencing)
  - [dot syntax function call with auto lifting](#dotcall)
+ - [auto union wrapping](#union-wrapping)
 
 If any features break backwards compatibility, please let me know by opening an issue.
 
@@ -64,3 +65,24 @@ int main(void) {
 
     return 0;
 }
+```
+
+## Union wrapping
+
+When an expression is used where a union is expected, and the union has a member of the type of the expression, the expression is automatically wrapped into a union.
+
+```C
+union u {
+    int x;
+    double y;
+}
+
+union u a = 2.5; // instead of {.y = 2.5}
+
+void f(union u a) { }
+
+void main() {
+    union u a = 5; // instead of {.x = 5}
+    f(10.0); // instead of (union u){.y = 10.0}
+}
+```
